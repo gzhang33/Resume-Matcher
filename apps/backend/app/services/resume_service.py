@@ -3,6 +3,7 @@ import uuid
 import json
 import tempfile
 import logging
+from datetime import datetime
 
 from markitdown import MarkItDown
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -312,3 +313,62 @@ class ResumeService:
             }
 
         return combined_data
+
+    async def update_processed_resume_data(self, resume_id: str, updated_data: dict) -> None:
+        """
+        Updates the processed resume data with missing information.
+        
+        Args:
+            resume_id: The ID of the resume to update
+            updated_data: The updated resume data
+            
+        Raises:
+            ResumeNotFoundError: If the resume is not found
+        """
+        # Check if resume exists
+        resume_query = select(Resume).where(Resume.resume_id == resume_id)
+        resume_result = await self.db.execute(resume_query)
+        resume = resume_result.scalars().first()
+        
+        if not resume:
+            raise ResumeNotFoundError(resume_id=resume_id)
+        
+        # Get existing processed resume
+        processed_query = select(ProcessedResume).where(
+            ProcessedResume.resume_id == resume_id
+        )
+        processed_result = await self.db.execute(processed_query)
+        processed_resume = processed_result.scalars().first()
+        
+        if not processed_resume:
+            raise ResumeNotFoundError(resume_id=resume_id, message="Processed resume data not found")
+        
+        # Update the processed resume data
+        if "personal_data" in updated_data:
+            processed_resume.personal_data = json.dumps(updated_data["personal_data"])
+        
+        if "experiences" in updated_data:
+            processed_resume.experiences = json.dumps({"experiences": updated_data["experiences"]})
+        
+        if "education" in updated_data:
+            processed_resume.education = json.dumps({"education": updated_data["education"]})
+        
+        if "projects" in updated_data:
+            processed_resume.projects = json.dumps({"projects": updated_data["projects"]})
+        
+        if "skills" in updated_data:
+            processed_resume.skills = json.dumps({"skills": updated_data["skills"]})
+        
+        if "research_work" in updated_data:
+            processed_resume.research_work = json.dumps({"research_work": updated_data["research_work"]})
+        
+        if "achievements" in updated_data:
+            processed_resume.achievements = json.dumps({"achievements": updated_data["achievements"]})
+        
+        if "extracted_keywords" in updated_data:
+            processed_resume.extracted_keywords = json.dumps({"extracted_keywords": updated_data["extracted_keywords"]})
+        
+        # Update the processed_at timestamp
+        processed_resume.processed_at = datetime.utcnow()
+        
+        await self.db.commit()

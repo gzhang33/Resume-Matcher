@@ -285,3 +285,72 @@ async def get_resume(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error fetching resume data",
         )
+
+
+@resume_router.put(
+    "/{resume_id}",
+    summary="Update resume data with missing information",
+)
+async def update_resume(
+    request: Request,
+    resume_id: str,
+    resume_data: dict,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Updates resume data with missing information provided by the user.
+    
+    Args:
+        resume_id: The ID of the resume to update
+        resume_data: The updated resume data
+        
+    Returns:
+        Success message with updated resume data
+        
+    Raises:
+        HTTPException: If the resume is not found or if there's an error updating data.
+    """
+    request_id = getattr(request.state, "request_id", str(uuid4()))
+    headers = {"X-Request-ID": request_id}
+    
+    try:
+        if not resume_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="resume_id is required",
+            )
+        
+        resume_service = ResumeService(db)
+        
+        # Update the processed resume data
+        await resume_service.update_processed_resume_data(
+            resume_id=resume_id,
+            updated_data=resume_data
+        )
+        
+        # Get updated resume data
+        updated_resume_data = await resume_service.get_resume_with_processed_data(
+            resume_id=resume_id
+        )
+        
+        return JSONResponse(
+            content={
+                "request_id": request_id,
+                "message": "Resume data updated successfully",
+                "data": updated_resume_data,
+            },
+            headers=headers,
+        )
+    
+    except ResumeNotFoundError as e:
+        logger.error(str(e))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Error updating resume: {str(e)} - traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error updating resume data",
+        )

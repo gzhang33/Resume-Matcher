@@ -13,6 +13,8 @@ import {
 // For this refinement, direct property access after casting to FileMetadata is used.
 import { formatBytes, useFileUpload, FileMetadata } from '@/hooks/use-file-upload';
 import { Button } from '@/components/ui/button';
+import MissingInfoModal from './missing-info-modal';
+import { detectMissingInfo, mergeMissingInfo, MissingField, ResumeData } from '@/lib/missing-info-detector';
 
 const acceptedFileTypes = [
 	'application/pdf', // .pdf
@@ -29,6 +31,12 @@ export default function FileUpload() {
 		type: 'success' | 'error';
 		message: string;
 	} | null>(null);
+
+	// Missing info modal state
+	const [showMissingInfoModal, setShowMissingInfoModal] = useState(false);
+	const [missingFields, setMissingFields] = useState<MissingField[]>([]);
+	const [pendingResumeData, setPendingResumeData] = useState<ResumeData | null>(null);
+	const [pendingResumeId, setPendingResumeId] = useState<string | null>(null);
 
 	const [
 		{ files, isDragging, errors: validationOrUploadErrors, isUploadingGlobal },
@@ -47,7 +55,7 @@ export default function FileUpload() {
 		accept: acceptString,
 		multiple: false,
 		uploadUrl: API_RESUME_UPLOAD_URL,
-		onUploadSuccess: (uploadedFile, response) => {
+		onUploadSuccess: async (uploadedFile, response) => {
 			console.log('Upload successful:', uploadedFile, response);
 			// uploadedFile.file is FileMetadata here, as transformed by the hook
 			const data = response as Record<string, unknown> & { resume_id?: string }
@@ -63,6 +71,27 @@ export default function FileUpload() {
 				return
 			}
 
+			// Check for missing information
+			try {
+				const resumeResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/resumes/${resumeId}`);
+				if (resumeResponse.ok) {
+					const resumeData: ResumeData = await resumeResponse.json();
+					const missing = detectMissingInfo(resumeData);
+					
+					if (missing.length > 0) {
+						// Show missing info modal
+						setMissingFields(missing);
+						setPendingResumeData(resumeData);
+						setPendingResumeId(resumeId);
+						setShowMissingInfoModal(true);
+						return;
+					}
+				}
+			} catch (error) {
+				console.warn('Could not check for missing info:', error);
+			}
+
+			// No missing info, proceed normally
 			setUploadFeedback({
 				type: 'success',
 				message: `${(uploadedFile.file as FileMetadata).name} uploaded successfully!`,
@@ -92,11 +121,67 @@ export default function FileUpload() {
 		setUploadFeedback(null);
 	};
 
+	// Handle missing info completion
+	const handleMissingInfoComplete = async (missingInfo: Record<string, string>) => {
+		if (!pendingResumeData || !pendingResumeId) return;
+
+		try {
+			// Merge missing info with existing data
+			const updatedData = mergeMissingInfo(pendingResumeData, missingInfo);
+			
+			// Update resume on server
+			const updateResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/resumes/${pendingResumeId}`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(updatedData),
+			});
+
+			if (updateResponse.ok) {
+				setUploadFeedback({
+					type: 'success',
+					message: 'Resume information completed successfully!',
+				});
+				clearErrors();
+				const encodedResumeId = encodeURIComponent(pendingResumeId);
+				window.location.href = `/jobs?resume_id=${encodedResumeId}`;
+			} else {
+				throw new Error('Failed to update resume');
+			}
+		} catch (error) {
+			console.error('Error updating resume:', error);
+			setUploadFeedback({
+				type: 'error',
+				message: 'Failed to update resume information. Please try again.',
+			});
+		} finally {
+			setShowMissingInfoModal(false);
+			setPendingResumeData(null);
+			setPendingResumeId(null);
+			setMissingFields([]);
+		}
+	};
+
+	// Handle missing info modal close
+	const handleMissingInfoClose = () => {
+		setShowMissingInfoModal(false);
+		setPendingResumeData(null);
+		setPendingResumeId(null);
+		setMissingFields([]);
+		// Still proceed to jobs page even with missing info
+		if (pendingResumeId) {
+			const encodedResumeId = encodeURIComponent(pendingResumeId);
+			window.location.href = `/jobs?resume_id=${encodedResumeId}`;
+		}
+	};
+
 	const displayErrors =
 		uploadFeedback?.type === 'error' ? [uploadFeedback.message] : validationOrUploadErrors;
 
 	return (
-		<div className="flex w-full flex-col gap-4 rounded-lg">
+		<>
+			<div className="flex w-full flex-col gap-4 rounded-lg">
 			<div
 				role="button"
 				tabIndex={!currentFile && !isUploadingGlobal ? 0 : -1}
@@ -231,6 +316,17 @@ export default function FileUpload() {
 					)}
 				</div>
 			)}
-		</div>
+			</div>
+
+			{/* Missing Info Modal */}
+			<MissingInfoModal
+				isOpen={showMissingInfoModal}
+				onClose={handleMissingInfoClose}
+				onComplete={handleMissingInfoComplete}
+				missingFields={missingFields}
+				title="Complete Your Resume Information"
+				description="We found some missing information that would help us better analyze your resume. Please provide the details below."
+			/>
+		</>
 	);
 }

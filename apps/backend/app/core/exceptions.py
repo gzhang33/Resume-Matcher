@@ -19,9 +19,19 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     request_id = getattr(request.state, "request_id", "")
+    # Convert errors to serializable format
+    serializable_errors = []
+    for error in exc.errors():
+        serializable_errors.append({
+            "type": error.get("type", "validation_error"),
+            "loc": list(error.get("loc", [])),
+            "msg": str(error.get("msg", "Validation error")),
+            "input": str(error.get("input", "")) if error.get("input") is not None else None
+        })
+    
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "request_id": request_id},
+        content={"detail": serializable_errors, "request_id": request_id},
     )
 
 

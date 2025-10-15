@@ -4,6 +4,7 @@ You are a JSON extraction engine. Convert the following resume text into precise
 - Do not make up values for any fields.
 - Use "Present" if an end date is ongoing.
 - Make sure dates are in YYYY-MM-DD.
+- Use null for missing or unavailable information (phone, company, location, etc.).
 - Do not format the response in Markdown or any other format. Just output raw JSON.
 
 Schema:
@@ -16,5 +17,5 @@ Resume:
 {1}
 ```
 
-NOTE: Please output only a valid JSON matching the EXACT schema.
+NOTE: Please output only a valid JSON matching the EXACT schema. Use null for missing fields.
 """

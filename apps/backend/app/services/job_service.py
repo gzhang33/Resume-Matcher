@@ -1,6 +1,7 @@
 import uuid
 import json
 import logging
+import re
 
 from typing import List, Dict, Any, Optional
 from pydantic import ValidationError
@@ -21,6 +22,101 @@ class JobService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.json_agent_manager = AgentManager()
+    
+    def _extract_fallback_keywords(self, text: str) -> List[str]:
+        """
+        Extract keywords from job description using dynamic text analysis.
+        All keywords are extracted from the actual text - NO hardcoded keywords.
+        
+        Uses multiple extraction strategies:
+        1. Capitalized terms (likely proper nouns, technologies)
+        2. Quoted terms (explicitly important)
+        3. Noun phrases from requirements/qualifications sections
+        4. Terms following key indicators (experience with, knowledge of, etc.)
+        """
+        if not text or len(text.strip()) < 10:
+            logger.warning("Text too short for keyword extraction")
+            return []
+        
+        keywords = set()
+        
+        # Strategy 1: Extract capitalized words/phrases (2+ chars)
+        # These are often technologies, frameworks, companies, acronyms
+        capitalized_pattern = r'\b[A-Z][A-Za-z0-9]*(?:[.\-/][A-Za-z0-9]+)*\b'
+        capitalized_matches = re.findall(capitalized_pattern, text)
+        for match in capitalized_matches:
+            if len(match) >= 2 and match not in ['The', 'A', 'An', 'In', 'On', 'At', 'To', 'For', 'And', 'Or', 'But', 'If', 'Our', 'We', 'You', 'Your', 'This', 'That', 'These', 'Those']:
+                keywords.add(match)
+        
+        # Strategy 2: Extract quoted terms
+        quoted_pattern = r'["\']([^"\']+)["\']'
+        quoted_matches = re.findall(quoted_pattern, text)
+        for match in quoted_matches:
+            if 2 <= len(match) <= 50:
+                keywords.add(match.strip())
+        
+        # Strategy 3: Extract terms after key phrases (experience with, knowledge of, etc.)
+        key_phrases = [
+            r'experience (?:with|in|using)\s+([A-Za-z0-9\s,/\-\.]+?)(?:\.|,|\n|and|or|\bfor\b)',
+            r'knowledge of\s+([A-Za-z0-9\s,/\-\.]+?)(?:\.|,|\n|and|or)',
+            r'proficiency in\s+([A-Za-z0-9\s,/\-\.]+?)(?:\.|,|\n|and|or)',
+            r'familiar(?:ity)? with\s+([A-Za-z0-9\s,/\-\.]+?)(?:\.|,|\n|and|or)',
+            r'skills?(?:\s+in)?[:\s]+([A-Za-z0-9\s,/\-\.]+?)(?:\.|,|\n{2})',
+            r'(?:requires?|required)[:\s]+([A-Za-z0-9\s,/\-\.]+?)(?:\.|,|\n{2})',
+        ]
+        
+        for pattern in key_phrases:
+            matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
+            for match in matches:
+                phrase = match.group(1).strip()
+                # Split by common separators
+                items = re.split(r'\s*[,;/]\s*|\s+and\s+|\s+or\s+', phrase)
+                for item in items:
+                    item = item.strip()
+                    if 2 <= len(item) <= 50:
+                        keywords.add(item)
+        
+        # Strategy 4: Extract degree mentions with context
+        degree_pattern = r"(Bachelor'?s?|Master'?s?|PhD|Doctorate|BSc|MSc|BA|MA|B\.S\.|M\.S\.)\s*(?:degree)?\s*(?:in)?\s*([A-Za-z\s]+?)(?:\.|,|or|\n)"
+        degree_matches = re.finditer(degree_pattern, text, re.IGNORECASE)
+        for match in degree_matches:
+            degree_type = match.group(1).strip()
+            field = match.group(2).strip() if match.group(2) else ''
+            if degree_type:
+                keywords.add(degree_type)
+            if field and len(field) > 2:
+                keywords.add(field.strip())
+        
+        # Strategy 5: Extract year requirements
+        year_pattern = r'(\d+)\+?\s*(?:years?|yrs?)\s*(?:of)?\s*(?:experience|exp)?'
+        year_matches = re.finditer(year_pattern, text, re.IGNORECASE)
+        for match in year_matches:
+            keywords.add(f"{match.group(1)}+ years")
+        
+        # Strategy 6: Extract hyphenated technical terms
+        hyphenated_pattern = r'\b[A-Za-z]+-[A-Za-z]+(?:-[A-Za-z]+)*\b'
+        hyphenated_matches = re.findall(hyphenated_pattern, text)
+        for match in hyphenated_matches:
+            if len(match) >= 5:
+                keywords.add(match)
+        
+        # Clean and filter keywords
+        filtered_keywords = set()
+        for keyword in keywords:
+            # Remove very short or very long keywords
+            if 2 <= len(keyword) <= 50:
+                # Remove pure numbers
+                if not keyword.isdigit():
+                    # Remove common words that aren't useful
+                    if keyword.lower() not in ['will', 'can', 'may', 'must', 'should', 'would', 'could', 'shall', 'need', 'able', 'have', 'has', 'had', 'get', 'got', 'make', 'made']:
+                        filtered_keywords.add(keyword.strip())
+        
+        # Convert to sorted list and limit
+        result = sorted(list(filtered_keywords))[:100]  # Increase limit to 100
+        logger.info(f"Dynamic keyword extraction found {len(result)} keywords from text")
+        if result:
+            logger.debug(f"Sample keywords: {result[:10]}")
+        return result
 
     async def create_and_store_job(self, job_data: dict) -> List[str]:
         """
@@ -68,9 +164,44 @@ class JobService:
         """
         structured_job = await self._extract_structured_json(job_description_text)
         if not structured_job:
-            logger.info("Structured job extraction failed.")
-            return None
+            logger.error(f"Structured job extraction failed for job_id: {job_id}")
+            # 使用动态文本分析提取关键词
+            fallback_keywords = self._extract_fallback_keywords(job_description_text)
+            
+            if not fallback_keywords:
+                logger.error(f"Dynamic keyword extraction found no keywords for job_id: {job_id}")
+                logger.error(f"Job description preview: {job_description_text[:200]}...")
+                # 不使用任何硬编码的默认关键词，返回空数组
+                fallback_keywords = []
+            
+            # 创建基本的 ProcessedJob 记录
+            processed_job = ProcessedJob(
+                job_id=job_id,
+                job_title="Position (AI Parsing Failed)",
+                job_summary=job_description_text[:500] + "..." if len(job_description_text) > 500 else job_description_text,
+                extracted_keywords=json.dumps({"extracted_keywords": fallback_keywords})
+            )
+            self.db.add(processed_job)
+            await self.db.flush()
+            await self.db.commit()
+            
+            if fallback_keywords:
+                logger.info(f"Created fallback ProcessedJob with {len(fallback_keywords)} extracted keywords for job_id: {job_id}")
+            else:
+                logger.warning(f"Created ProcessedJob with NO keywords for job_id: {job_id} - resume improvement may fail")
+            return job_id
 
+        # 检查并确保关键词不为空
+        extracted_keywords = structured_job.get("extracted_keywords", [])
+        if not extracted_keywords or len(extracted_keywords) == 0:
+            logger.warning(f"AI parsing succeeded but no keywords extracted for job_id: {job_id}, using dynamic extraction")
+            extracted_keywords = self._extract_fallback_keywords(job_description_text)
+            if not extracted_keywords:
+                logger.error(f"Dynamic keyword extraction also found no keywords for job_id: {job_id}")
+                logger.error(f"Job description preview: {job_description_text[:200]}...")
+                # 不使用硬编码的默认值，返回空数组
+                extracted_keywords = []
+        
         processed_job = ProcessedJob(
             job_id=job_id,
             job_title=structured_job.get("job_title"),
@@ -100,10 +231,8 @@ class JobService:
             if structured_job.get("application_info")
             else None,
             extracted_keywords=json.dumps(
-                {"extracted_keywords": structured_job.get("extracted_keywords", [])}
-            )
-            if structured_job.get("extracted_keywords")
-            else None,
+                {"extracted_keywords": extracted_keywords}
+            ),
         )
 
         self.db.add(processed_job)
@@ -119,28 +248,34 @@ class JobService:
         Uses the AgentManager+JSONWrapper to ask the LLM to
         return the data in exact JSON schema we need.
         """
-        prompt_template = prompt_factory.get("structured_job")
-        prompt = prompt_template.format(
-            json.dumps(json_schema_factory.get("structured_job"), indent=2),
-            job_description_text,
-        )
-        logger.info(f"Structured Job Prompt: {prompt}")
-        raw_output = await self.json_agent_manager.run(prompt=prompt)
-
         try:
-            structured_job: StructuredJobModel = StructuredJobModel.model_validate(
-                raw_output
+            prompt_template = prompt_factory.get("structured_job")
+            prompt = prompt_template.format(
+                json.dumps(json_schema_factory.get("structured_job"), indent=2),
+                job_description_text,
             )
-        except ValidationError as e:
-            logger.info(f"Validation error: {e}")
-            error_details = []
-            for error in e.errors():
-                field = " -> ".join(str(loc) for loc in error["loc"])
-                error_details.append(f"{field}: {error['msg']}")
-            
-            logger.info(f"Validation error details: {'; '.join(error_details)}")
+            logger.info(f"Structured Job Prompt: {prompt}")
+            raw_output = await self.json_agent_manager.run(prompt=prompt)
+
+            try:
+                structured_job: StructuredJobModel = StructuredJobModel.model_validate(
+                    raw_output
+                )
+            except ValidationError as e:
+                logger.error(f"Validation error: {e}")
+                error_details = []
+                for error in e.errors():
+                    field = " -> ".join(str(loc) for loc in error["loc"])
+                    error_details.append(f"{field}: {error['msg']}")
+                
+                logger.error(f"Validation error details: {'; '.join(error_details)}")
+                logger.error(f"Raw AI output: {raw_output}")
+                return None
+            return structured_job.model_dump(mode="json")
+        except Exception as e:
+            logger.error(f"AI agent error during job parsing: {e}")
+            logger.error(f"Job description text: {job_description_text[:200]}...")
             return None
-        return structured_job.model_dump(mode="json")
 
     async def get_job_with_processed_data(self, job_id: str) -> Optional[Dict]:
         """

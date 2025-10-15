@@ -3,15 +3,15 @@ from pydantic import BaseModel, Field
 
 
 class Location(BaseModel):
-    city: str
-    country: str
+    city: Optional[str] = None
+    country: Optional[str] = None
 
 
 class PersonalData(BaseModel):
     firstName: str = Field(..., alias="firstName")
     lastName: Optional[str] = Field(..., alias="lastName")
     email: str
-    phone: str
+    phone: Optional[str] = None
     linkedin: Optional[str] = None
     portfolio: Optional[str] = None
     location: Location
@@ -19,8 +19,8 @@ class PersonalData(BaseModel):
 
 class Experience(BaseModel):
     job_title: str = Field(..., alias="jobTitle")
-    company: str
-    location: str
+    company: Optional[str] = None
+    location: Optional[str] = None
     start_date: str = Field(..., alias="startDate")
     end_date: str = Field(..., alias="endDate")
     description: List[str]
