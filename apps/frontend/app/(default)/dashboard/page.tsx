@@ -17,77 +17,80 @@ interface AnalyzedJobData {
 	location: string;
 }
 
-const mockResumeData = {
-	personalInfo: {
-		name: 'Ada Lovelace',
-		title: 'Software Engineer & Visionary',
-		email: 'ada.lovelace@example.com',
-		phone: '+1-234-567-8900',
-		location: 'London, UK',
-		website: 'analyticalengine.dev',
-		linkedin: 'linkedin.com/in/adalovelace',
-		github: 'github.com/adalovelace',
-	},
-	summary:
-		'Pioneering computer programmer with a strong foundation in mathematics and analytical thinking. Known for writing the first algorithm intended to be carried out by a machine. Seeking challenging opportunities to apply analytical skills to modern computing problems.',
-	experience: [
-		{
-			id: 1,
-			title: 'Collaborator & Algorithm Designer',
-			company: "Charles Babbage's Analytical Engine Project",
-			location: 'London, UK',
-			years: '1842 - 1843',
-			description: [
-				"Developed the first published algorithm intended for implementation on a computer, Charles Babbage's Analytical Engine.",
-				"Translated Luigi Menabrea's memoir on the Analytical Engine, adding extensive notes (Notes G) which included the algorithm.",
-				'Foresaw the potential for computers to go beyond mere calculation, envisioning applications in music and art.',
-			],
-		},
-	],
-	education: [
-		{
-			id: 1,
-			institution: 'Self-Taught & Private Tutoring',
-			degree: 'Mathematics and Science',
-			years: 'Early 19th Century',
-			description:
-				'Studied mathematics and science extensively under tutors like Augustus De Morgan, a prominent mathematician.',
-		},
-		// Add more education objects here if needed
-	],
-	skills: [
-		'Algorithm Design',
-		'Analytical Thinking',
-		'Mathematical Modeling',
-		'Computational Theory',
-		'Technical Writing',
-		'French (Translation)',
-		'Symbolic Logic',
-	],
-};
 
 export default function DashboardPage() {
 	const { improvedData } = useResumePreview();
-	console.log('Improved Data:', improvedData);
+	console.log('Dashboard - Improved Data:', improvedData);
+	
 	if (!improvedData) {
 		return (
 			<BackgroundContainer className="min-h-screen" innerClassName="bg-zinc-950">
 				<div className="flex items-center justify-center h-full p-6 text-gray-400">
-					No improved resume found. Please click “Improve” on the Job Upload page first.
+					No improved resume found. Please click "Improve" on the Job Upload page first.
 				</div>
 			</BackgroundContainer>
 		);
 	}
 
 	const { data } = improvedData;
+	console.log('Dashboard - Data object:', data);
+	
 	const { resume_preview, new_score } = data;
-	const preview = resume_preview ?? mockResumeData;
+	console.log('Dashboard - resume_preview:', resume_preview);
+	console.log('Dashboard - new_score:', new_score);
+	
+	// 确保使用真实的简历数据，如果没有则显示错误
+	if (!resume_preview) {
+		console.error('Dashboard - resume_preview is null or undefined');
+		return (
+			<BackgroundContainer className="min-h-screen" innerClassName="bg-zinc-950">
+				<div className="flex flex-col items-center justify-center h-full p-6 text-gray-400">
+					<p className="text-xl mb-4">No resume data found.</p>
+					<p className="text-sm">The server did not return resume preview data. Please check the console for details.</p>
+					<p className="text-xs mt-4">Debug info: {JSON.stringify(data, null, 2)}</p>
+				</div>
+			</BackgroundContainer>
+		);
+	}
+	
+	const preview = resume_preview;
 	const newPct = Math.round(new_score * 100);
 
-	const handleJobUpload = async (text: string): Promise<AnalyzedJobData | null> => {
-		void text; // Prevent unused variable warning
-		alert('Job analysis not implemented yet.');
-		return null;
+	const handleJobUpload = async (): Promise<AnalyzedJobData | null> => {
+		if (!data.job_id) {
+			console.error('No job_id available in improvedData');
+			return null;
+		}
+
+		try {
+			const res = await fetch(
+				`${process.env.NEXT_PUBLIC_API_URL}/api/v1/jobs?job_id=${encodeURIComponent(data.job_id)}`
+			);
+			if (!res.ok) {
+				console.error('Failed to fetch job data:', res.status, res.statusText);
+				return null;
+			}
+
+			const jobResponse = await res.json();
+			const jobData = jobResponse.data?.processed_job;
+
+			if (!jobData) {
+				console.error('No processed_job data in response:', jobResponse);
+				return null;
+			}
+
+			// Map backend job data to AnalyzedJobData format
+			return {
+				title: jobData.job_title || 'Unknown Position',
+				company: jobData.company_profile?.company_name || 'Unknown Company',
+				location: jobData.location?.city ? 
+					`${jobData.location.city}${jobData.location.state ? ', ' + jobData.location.state : ''}` : 
+					'Not specified',
+			};
+		} catch (error) {
+			console.error('Error fetching job data:', error);
+			return null;
+		}
 	};
 
 
@@ -114,7 +117,7 @@ export default function DashboardPage() {
 						{/* Left column */}
 						<div className="space-y-8">
 							<section>
-								<JobListings onUploadJob={handleJobUpload} />
+								<JobListings onLoadJob={handleJobUpload} />
 							</section>
 							<section>
 								<ResumeAnalysis

@@ -1,7 +1,7 @@
 SCHEMA = {
     "personalInfo": {
         "name": "string",
-        "title": "string",
+        "title": "string | null",
         "email": "string",
         "phone": "string",
         "location": "string | null",
@@ -14,9 +14,9 @@ SCHEMA = {
         {
             "id": 0,
             "title": "string",
-            "company": "string",
-            "location": "string",
-            "years": "string",
+            "company": "string | null",
+            "location": "string | null",
+            "years": "string | null",
             "description": ["string"],
         }
     ],

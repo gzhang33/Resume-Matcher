@@ -23,6 +23,43 @@ class JobService:
         self.db = db
         self.json_agent_manager = AgentManager()
     
+    def _extract_title_from_text(self, text: str) -> str:
+        """
+        Try to extract a reasonable job title directly from the raw text.
+        Strategy:
+        - Use the first non-empty line that looks like a short title (<= 120 chars)
+        - Prefer lines with 2-10 words and minimal punctuation
+        - Fallback to the first ~80 chars of the text (still derived from user input)
+        - Never introduce hardcoded business data. If nothing can be extracted, return empty string.
+        """
+        if not text:
+            logger.warning("No text provided for title extraction; returning empty title")
+            return ""
+
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        title_candidate = ""
+
+        # Heuristic 1: first short line, limited punctuation, reasonable word count
+        for ln in lines:
+            if len(ln) <= 120:
+                # Count words and punctuation density
+                words = ln.split()
+                if 1 <= len(words) <= 12:
+                    # Limit heavy punctuation lines
+                    punct_ratio = sum(ch in ",.;:!/?|" for ch in ln) / max(len(ln), 1)
+                    if punct_ratio < 0.1:
+                        title_candidate = ln
+                        break
+
+        # Heuristic 2: fallback to first 80 chars from text (still user-provided)
+        if not title_candidate:
+            snippet = text.strip()[:80]
+            title_candidate = snippet
+
+        # Final cleanup: collapse spaces
+        title_candidate = re.sub(r"\s+", " ", title_candidate).strip()
+        return title_candidate
+
     def _extract_fallback_keywords(self, text: str) -> List[str]:
         """
         Extract keywords from job description using dynamic text analysis.
@@ -175,9 +212,10 @@ class JobService:
                 fallback_keywords = []
             
             # 创建基本的 ProcessedJob 记录
+            dynamic_title = self._extract_title_from_text(job_description_text)
             processed_job = ProcessedJob(
                 job_id=job_id,
-                job_title="Position (AI Parsing Failed)",
+                job_title=dynamic_title,
                 job_summary=job_description_text[:500] + "..." if len(job_description_text) > 500 else job_description_text,
                 extracted_keywords=json.dumps({"extracted_keywords": fallback_keywords})
             )
@@ -271,7 +309,7 @@ class JobService:
                 logger.error(f"Validation error details: {'; '.join(error_details)}")
                 logger.error(f"Raw AI output: {raw_output}")
                 return None
-            return structured_job.model_dump(mode="json")
+            return structured_job.model_dump(mode="json", by_alias=False)
         except Exception as e:
             logger.error(f"AI agent error during job parsing: {e}")
             logger.error(f"Job description text: {job_description_text[:200]}...")

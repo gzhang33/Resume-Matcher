@@ -66,14 +66,38 @@ export async function improveResume(
         throw new Error(errorMessage);
     }
 
-    let data: ImprovedResult;
+    let responseData: any;
     try {
-        data = JSON.parse(text) as ImprovedResult;
+        responseData = JSON.parse(text);
     } catch (parseError) {
         console.error('Failed to parse improveResume response:', parseError, 'Raw response:', text);
         throw parseError;
     }
 
-    console.log('Resume improvement response:', data);
+    console.log('Resume improvement response:', responseData);
+    
+    // 检查resume_preview是否存在
+    if (!responseData.data || !responseData.data.resume_preview) {
+        console.error('Resume preview is missing from response:', responseData);
+        throw new Error('Resume preview data is missing from the server response. Please try again.');
+    }
+    
+    console.log('Resume preview data:', responseData.data.resume_preview);
+    
+    // 转换后端返回的数据结构为前端期望的格式
+    const data: ImprovedResult = {
+        data: {
+            request_id: responseData.request_id,
+            resume_id: responseData.data.resume_id,
+            job_id: responseData.data.job_id,
+            original_score: responseData.data.original_score,
+            new_score: responseData.data.new_score,
+            resume_preview: responseData.data.resume_preview,
+            details: responseData.data.details || '',
+            commentary: responseData.data.commentary || '',
+            improvements: responseData.data.improvements || []
+        }
+    };
+    
     return data;
 }

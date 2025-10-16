@@ -7,6 +7,7 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
+	DialogDescription,
 	DialogTrigger,
 	DialogFooter,
 	DialogClose,
@@ -66,6 +67,9 @@ const ResumeAnalysis: React.FC<ResumeAnalysisProps> = ({
 						<DialogTitle className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">
 							Detailed Resume Analysis
 						</DialogTitle>
+						<DialogDescription className="text-gray-400">
+							Comprehensive analysis of your resume match score and improvement suggestions
+						</DialogDescription>
 					</DialogHeader>
 
 					<div className="p-6 max-h-[70vh] overflow-y-auto">

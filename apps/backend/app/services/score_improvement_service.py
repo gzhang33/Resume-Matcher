@@ -12,7 +12,7 @@ from typing import Dict, Optional, Tuple, AsyncGenerator
 
 from app.prompt import prompt_factory
 from app.schemas.json import json_schema_factory
-from app.schemas.pydantic import ResumePreviewerModel
+from app.schemas.pydantic import ResumePreviewerModel, ResumeAnalysisModel
 from app.agent import EmbeddingManager, AgentManager
 from app.models import Resume, Job, ProcessedResume, ProcessedJob
 from .exceptions import (
@@ -187,15 +187,81 @@ class ScoreImprovementService:
         )
         logger.info(f"Structured Resume Prompt: {prompt}")
         raw_output = await self.json_agent_manager.run(prompt=prompt)
+        
+        logger.info(f"Raw output from agent: {json.dumps(raw_output, indent=2)}")
 
         try:
             resume_preview: ResumePreviewerModel = ResumePreviewerModel.model_validate(
                 raw_output
             )
+            logger.info(f"Successfully validated resume preview")
+            return resume_preview.model_dump()
         except ValidationError as e:
-            logger.info(f"Validation error: {e}")
+            logger.error(f"Validation error when creating resume preview: {e}")
+            logger.error(f"Raw output that failed validation: {json.dumps(raw_output, indent=2)}")
+            
+            # 尝试返回原始数据，即使验证失败
+            # 这样前端至少能得到一些数据，而不是None
+            if isinstance(raw_output, dict):
+                logger.warning("Returning raw output despite validation failure")
+                return raw_output
+            
+            logger.error("Cannot return resume preview - returning None")
             return None
-        return resume_preview.model_dump()
+
+    async def generate_analysis(
+        self,
+        original_resume: str,
+        improved_resume: str,
+        job_description: str,
+        original_score: float,
+        new_score: float,
+    ) -> Dict:
+        """
+        Generate detailed analysis of the resume improvement process.
+        Returns details, commentary, and improvement suggestions.
+        """
+        prompt_template = prompt_factory.get("resume_analysis")
+        score_improvement = new_score - original_score
+        
+        prompt = prompt_template.format(
+            original_resume=original_resume,
+            improved_resume=improved_resume,
+            job_description=job_description,
+            original_score=original_score,
+            new_score=new_score,
+            score_improvement=score_improvement,
+        )
+        
+        logger.info(f"Generating resume analysis...")
+        
+        try:
+            raw_output = await self.json_agent_manager.run(prompt=prompt)
+            logger.info(f"Raw analysis output: {json.dumps(raw_output, indent=2)}")
+            
+            # Validate the output
+            analysis: ResumeAnalysisModel = ResumeAnalysisModel.model_validate(raw_output)
+            logger.info(f"Successfully validated analysis")
+            
+            return analysis.model_dump()
+        except ValidationError as e:
+            logger.error(f"Validation error when creating analysis: {e}")
+            logger.error(f"Raw output that failed validation: {json.dumps(raw_output, indent=2)}")
+            
+            # Return fallback analysis
+            return {
+                "details": f"Resume match score improved from {original_score:.1%} to {new_score:.1%}.",
+                "commentary": "The resume has been optimized to better align with the job requirements.",
+                "improvements": []
+            }
+        except Exception as e:
+            logger.error(f"Error generating analysis: {e}")
+            # Return minimal fallback
+            return {
+                "details": "Analysis generation encountered an error.",
+                "commentary": "Please review the updated resume manually.",
+                "improvements": []
+            }
 
     async def run(self, resume_id: str, job_id: str) -> Dict:
         """
@@ -243,6 +309,17 @@ class ScoreImprovementService:
 
         logger.info(f"Resume Preview: {resume_preview}")
 
+        # Generate detailed analysis
+        analysis = await self.generate_analysis(
+            original_resume=resume.content,
+            improved_resume=updated_resume,
+            job_description=job.content,
+            original_score=cosine_similarity_score,
+            new_score=updated_score,
+        )
+
+        logger.info(f"Resume Analysis: {analysis}")
+
         execution = {
             "resume_id": resume_id,
             "job_id": job_id,
@@ -250,6 +327,9 @@ class ScoreImprovementService:
             "new_score": updated_score,
             "updated_resume": markdown.markdown(text=updated_resume),
             "resume_preview": resume_preview,
+            "details": analysis.get("details", ""),
+            "commentary": analysis.get("commentary", ""),
+            "improvements": analysis.get("improvements", []),
         }
 
         gc.collect()
@@ -306,9 +386,22 @@ class ScoreImprovementService:
             extracted_job_keywords_embedding=extracted_job_keywords_embedding,
         )
 
-        for i, suggestion in enumerate(updated_resume):
-            yield f"data: {json.dumps({'status': 'suggestion', 'index': i, 'text': suggestion})}\n\n"
-            await asyncio.sleep(0.2)
+        yield f"data: {json.dumps({'status': 'generating_preview', 'message': 'Creating resume preview...'})}\n\n"
+        
+        resume_preview = await self.get_resume_for_previewer(
+            updated_resume=updated_resume
+        )
+        
+        yield f"data: {json.dumps({'status': 'analyzing', 'message': 'Generating detailed analysis...'})}\n\n"
+        
+        # Generate detailed analysis
+        analysis = await self.generate_analysis(
+            original_resume=resume.content,
+            improved_resume=updated_resume,
+            job_description=job.content,
+            original_score=cosine_similarity_score,
+            new_score=updated_score,
+        )
 
         final_result = {
             "resume_id": resume_id,
@@ -316,6 +409,10 @@ class ScoreImprovementService:
             "original_score": cosine_similarity_score,
             "new_score": updated_score,
             "updated_resume": markdown.markdown(text=updated_resume),
+            "resume_preview": resume_preview,
+            "details": analysis.get("details", ""),
+            "commentary": analysis.get("commentary", ""),
+            "improvements": analysis.get("improvements", []),
         }
 
         yield f"data: {json.dumps({'status': 'completed', 'result': final_result})}\n\n"

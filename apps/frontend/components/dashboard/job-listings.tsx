@@ -14,17 +14,37 @@ interface Job {
 type AnalyzedJobData = Pick<Job, 'title' | 'company' | 'location'>;
 
 interface JobListingsProps {
-	// jobs prop removed
-	// characterLimit prop removed
-	onUploadJob: (text: string) => Promise<AnalyzedJobData | null>; // Updated prop
+	// Callback to load job data
+	onLoadJob: () => Promise<AnalyzedJobData | null>;
 }
 
-const JobListings: React.FC<JobListingsProps> = ({ onUploadJob }) => {
+const JobListings: React.FC<JobListingsProps> = ({ onLoadJob }) => {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [analyzedJob, setAnalyzedJob] = useState<AnalyzedJobData | null>(null);
 	const [isAnalyzing, setIsAnalyzing] = useState(false);
+	const [isLoading, setIsLoading] = useState(true);
 	// Optional: add error state for analysis failures
 	// const [error, setError] = useState<string | null>(null);
+
+	// Auto-load job data on mount
+	React.useEffect(() => {
+		const loadJob = async () => {
+			setIsLoading(true);
+			try {
+				const jobData = await onLoadJob();
+				setAnalyzedJob(jobData);
+				if (!jobData) {
+					console.warn('No job data available.');
+				}
+			} catch (err) {
+				console.error('Error loading job data:', err);
+				setAnalyzedJob(null);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+		loadJob();
+	}, [onLoadJob]);
 
 	const handleOpenModal = () => {
 		// setError(null); // Clear previous errors when opening modal
@@ -32,42 +52,21 @@ const JobListings: React.FC<JobListingsProps> = ({ onUploadJob }) => {
 	};
 	const handleCloseModal = () => setIsModalOpen(false);
 
-	const handlePasteAndAnalyzeJob = async (text: string) => {
-		setIsAnalyzing(true);
-		setAnalyzedJob(null); // Clear previous job
-		// setError(null); // Clear previous errors
-		try {
-			const jobData = await onUploadJob(text);
-			setAnalyzedJob(jobData);
-			if (!jobData) {
-				// Handle case where analysis returns null (e.g., failed to parse)
-				// setError("Failed to analyze job description.");
-				console.warn('Analysis returned no data.');
-			}
-		} catch (err) {
-			console.error('Error analyzing job description:', err);
-			// setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
-			setAnalyzedJob(null);
-		} finally {
-			setIsAnalyzing(false);
-			handleCloseModal();
-		}
-	};
+	// Removed - not needed in dashboard as jobs are already analyzed
 
 	// truncateText function removed as it's no longer used
 
 	return (
 		<div className="bg-gray-900/80 backdrop-blur-sm p-6 rounded-lg shadow-xl border border-gray-800/50">
-			<h2 className="text-2xl font-bold text-white mb-1">Job Analyzer</h2>
+			<h2 className="text-2xl font-bold text-white mb-1">Job Analysis</h2>
 			<p className="text-gray-400 mb-6 text-sm">
 				{analyzedJob
-					? 'Analyzed job details below.'
-					: 'Upload a job description to analyze its key details.'}
+					? 'Job details matched in your resume improvement.'
+					: 'Loading job details...'}
 			</p>
-			{isAnalyzing ? (
+			{isLoading ? (
 				<div className="text-center text-gray-400 py-8">
-					<p>Analyzing job description...</p>
-					{/* Optional: Add a spinner here */}
+					<p>Loading job details...</p>
 				</div>
 			) : analyzedJob ? (
 				<div className="space-y-4">
@@ -79,32 +78,14 @@ const JobListings: React.FC<JobListingsProps> = ({ onUploadJob }) => {
 						<p className="text-sm text-gray-300">{analyzedJob.company}</p>
 						<p className="text-xs text-gray-400 mt-1">{analyzedJob.location}</p>
 					</div>
-					<button
-						onClick={handleOpenModal}
-						className="w-full text-center block bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-md transition-colors duration-200 text-sm mt-4"
-					>
-						Analyze Another Job Description
-					</button>
 				</div>
 			) : (
 				<div className="text-center text-gray-400 py-8 flex flex-col justify-center items-center">
 					{/* Optional: Display error message here if setError is implemented */}
 					{/* {error && <p className="text-red-400 mb-3">{error}</p>} */}
-					<p className="mb-3">No job description analyzed yet.</p>
-					<button
-						onClick={handleOpenModal}
-						className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200 text-sm"
-					>
-						Upload Job Description
-					</button>
+					<p className="mb-3">No job description data available.</p>
+					<p className="text-xs">The job data could not be loaded from your previous analysis.</p>
 				</div>
-			)}
-			{/* Removed the always-visible bottom button as its functionality is covered */}
-			{isModalOpen && (
-				<PasteJobDescription
-					onClose={handleCloseModal}
-					onPaste={handlePasteAndAnalyzeJob}
-				/>
 			)}
 		</div>
 	);

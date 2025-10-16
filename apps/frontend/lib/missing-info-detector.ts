@@ -207,3 +207,4 @@ export function mergeMissingInfo(originalData: ResumeData, missingInfo: Record<s
   
   return updatedData;
 }
+
