@@ -1,6 +1,6 @@
 from fastapi import UploadFile
 from os import listdir, unlink
-from os.path import join, isfile, abspath
+from os.path import join, isfile, abspath, dirname
 from typing import List
 from reportlab.pdfgen import canvas  # type: ignore
 from reportlab.lib.pagesizes import A4  # type: ignore
@@ -45,8 +45,9 @@ def build_full_file_path(*path: str) -> str:
       str: The full file path.
     """
 
-    # Get the absolute path to the project base directory (step back 1 directory from the webapp/ directory)
-    project_absolute_path = abspath("./..")
+    # Get the absolute path to the project base directory relative to this file
+    # e.g. webapp/backend/scripts/files.py -> go up 3 levels to project root
+    project_absolute_path = abspath(join(dirname(__file__), "..", "..", ".."))
     sub_path = join(*path)
 
     # Print the path to the directory to clear
