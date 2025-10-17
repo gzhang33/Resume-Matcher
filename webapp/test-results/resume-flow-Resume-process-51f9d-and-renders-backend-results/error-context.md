@@ -1,0 +1,93 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - img "Resume Matcher Logo" [ref=e4]
+    - navigation [ref=e5]:
+      - list [ref=e6]:
+        - listitem [ref=e7]:
+          - link "Contributions" [ref=e8] [cursor=pointer]:
+            - /url: https://github.com/srbhr/Resume-Matcher/graphs/contributors
+        - listitem [ref=e9]:
+          - link "Docs" [ref=e10] [cursor=pointer]:
+            - /url: https://github.com/srbhr/Resume-Matcher#readme
+        - listitem [ref=e11]:
+          - link "Main Site" [ref=e12] [cursor=pointer]:
+            - /url: https://www.resumematcher.fyi/
+    - navigation [ref=e13]:
+      - list [ref=e14]:
+        - listitem [ref=e15]:
+          - link "Star UsGitHub Octocat Logo" [ref=e16] [cursor=pointer]:
+            - /url: https://github.com/srbhr/Resume-Matcher
+            - button "Star UsGitHub Octocat Logo" [ref=e17]:
+              - text: Star Us
+              - img "GitHub Octocat Logo" [ref=e18]
+        - listitem [ref=e19]:
+          - link "Join our Discord" [ref=e20] [cursor=pointer]:
+            - /url: https://dsc.gg/resume-matcher
+            - button "Join our Discord" [ref=e21]
+  - main [ref=e22]:
+    - generic [ref=e23]:
+      - heading "Free and Open Source ATS to help your resume pass the screening stage." [level=1] [ref=e24]
+      - generic [ref=e25]:
+        - text: Upload Your Resume
+        - generic [ref=e26]: "Accepted file type(s): application/pdf"
+        - paragraph [ref=e27]: Or Drop File Here
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - paragraph [ref=e31]: Resume Matcher
+          - list [ref=e32]:
+            - link "Github" [ref=e33] [cursor=pointer]:
+              - /url: https://github.com/srbhr/Resume-Matcher
+            - link "Apache 2.0" [ref=e34] [cursor=pointer]:
+              - /url: https://github.com/srbhr/Resume-Matcher/blob/master/LICENSE
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - paragraph [ref=e37]: Community
+            - list [ref=e38]:
+              - listitem [ref=e39]:
+                - link "Dev Community Posts" [ref=e40] [cursor=pointer]:
+                  - /url: https://dev.to/srbhr/creating-a-game-changer-in-job-search-an-open-source-ats-resume-matcher-31g9
+          - generic [ref=e41]:
+            - paragraph [ref=e42]: Find Us
+            - list [ref=e43]:
+              - listitem [ref=e44]:
+                - link "Product Hunt" [ref=e45] [cursor=pointer]:
+                  - /url: https://www.producthunt.com/posts/resume-matcher
+              - listitem [ref=e46]:
+                - link "Discord" [ref=e47] [cursor=pointer]:
+                  - /url: https://discord.gg/t3Y9HEuV34
+              - listitem [ref=e48]:
+                - link "Alternative To" [ref=e49] [cursor=pointer]:
+                  - /url: https://alternativeto.net/software/resume-matcher/
+              - listitem [ref=e50]:
+                - link "Toolify AI" [ref=e51] [cursor=pointer]:
+                  - /url: https://www.toolify.ai/tool/resume-matcher
+          - generic [ref=e52]:
+            - paragraph [ref=e53]: Github
+            - list [ref=e54]:
+              - listitem [ref=e55]:
+                - link "Creator" [ref=e56] [cursor=pointer]:
+                  - /url: https://github.com/srbhr
+              - listitem [ref=e57]:
+                - link "Contributors" [ref=e58] [cursor=pointer]:
+                  - /url: https://github.com/srbhr/Resume-Matcher/graphs/contributors
+              - listitem [ref=e59]:
+                - link "Star Gazers" [ref=e60] [cursor=pointer]:
+                  - /url: https://github.com/srbhr/Resume-Matcher/stargazers
+              - listitem [ref=e61]:
+                - link "Forks" [ref=e62] [cursor=pointer]:
+                  - /url: https://github.com/srbhr/Resume-Matcher/forks
+      - generic [ref=e63]:
+        - link "Discord Logo" [ref=e64] [cursor=pointer]:
+          - /url: https://discord.com/invite/t3Y9HEuV34
+          - img "Discord Logo" [ref=e65]
+        - link "Product Hunt Logo" [ref=e66] [cursor=pointer]:
+          - /url: https://www.producthunt.com/posts/resume-matcher
+          - img "Product Hunt Logo" [ref=e67]
+        - link "GitHub Logo" [ref=e68] [cursor=pointer]:
+          - /url: https://github.com/srbhr/Resume-Matcher
+          - img "GitHub Logo" [ref=e69]
+```
